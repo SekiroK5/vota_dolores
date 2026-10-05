@@ -1,1 +1,7 @@
-enum ResultadoVoto { exitoso, opcionInvalida, usuarioYaVoto, votacionCerrada }
+enum ResultadoVoto {
+  exitoso,
+  opcionInvalida,
+  usuarioYaVoto,
+  votacionCerrada,
+  maximoVotosAlcanzado,
+}

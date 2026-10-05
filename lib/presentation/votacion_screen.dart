@@ -1,25 +1,39 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../modelos/opcion_votacion.dart';
 import '../modelos/votacion.dart';
 import '../modelos/resultado_opcion.dart';
 import '../logica/resultado_voto.dart';
 import '../logica/servicio_votacion.dart';
+import 'confetti_painter.dart';
 
 class VotacionScreen extends StatefulWidget {
   const VotacionScreen({super.key});
+
   @override
   State<VotacionScreen> createState() => _VotacionScreenState();
 }
 
-class _VotacionScreenState extends State<VotacionScreen> {
+class _VotacionScreenState extends State<VotacionScreen> with SingleTickerProviderStateMixin {
   late final Votacion _votacion;
-  late final ServicioVotacion _servicio;
+  late ServicioVotacion _servicio;
   bool _yaVote = false;
-  final String _idUsuario = 'invitado-' + DateTime.now().millisecondsSinceEpoch.toString();
+  late final TextEditingController _usuarioController;
+  late final AnimationController _confettiController;
 
   @override
   void initState() {
     super.initState();
+    _usuarioController = TextEditingController(
+      text: 'vecino-${DateTime.now().millisecondsSinceEpoch}',
+    );
+    _confettiController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
+
     _votacion = Votacion(
       pregunta: 'Que obra prioritaria debe realizar el municipio este ano?',
       opciones: [
@@ -31,16 +45,57 @@ class _VotacionScreenState extends State<VotacionScreen> {
       fechaCierre: DateTime.now().add(const Duration(days: 7)),
     );
     _servicio = ServicioVotacion(_votacion);
+    unawaited(_cargarPersistencia());
+  }
+
+  @override
+  void dispose() {
+    _usuarioController.dispose();
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarPersistencia() async {
+    final servicioPersistido = ServicioVotacion(_votacion);
+    await servicioPersistido.cargarEstado();
+    if (!mounted) return;
+    setState(() {
+      _servicio = servicioPersistido;
+      _yaVote = _votacion.votantes.contains(_usuarioController.text.trim());
+    });
+  }
+
+  Future<void> _guardarPersistencia() async {
+    await _servicio.guardarEstado();
   }
 
   void _votar(String idOpcion) {
-    final resultado = _servicio.registrarVoto(idUsuario: _idUsuario, idOpcion: idOpcion);
-    if (resultado == ResultadoVoto.exitoso) {
-      setState(() => _yaVote = true);
-    } else if (resultado == ResultadoVoto.usuarioYaVoto) {
-      _mensaje('Ya registramos tu voto en este plebiscito.');
-    } else if (resultado == ResultadoVoto.votacionCerrada) {
-      _mensaje('Esta votacion ya cerro.');
+    final idUsuario = _usuarioController.text.trim();
+    if (idUsuario.isEmpty) {
+      _mensaje('Escribe un nombre de vecino antes de votar.');
+      return;
+    }
+
+    final resultado = _servicio.registrarVoto(idUsuario: idUsuario, idOpcion: idOpcion);
+
+    switch (resultado) {
+      case ResultadoVoto.exitoso:
+        _guardarPersistencia();
+        setState(() => _yaVote = true);
+        _mensaje('Gracias por votar.');
+        break;
+      case ResultadoVoto.usuarioYaVoto:
+        _mensaje('Este vecino ya registró su voto.');
+        break;
+      case ResultadoVoto.votacionCerrada:
+        _mensaje('Esta votacion ya cerro.');
+        break;
+      case ResultadoVoto.maximoVotosAlcanzado:
+        _mensaje('Se alcanzó el máximo de votantes permitidos.');
+        break;
+      case ResultadoVoto.opcionInvalida:
+        _mensaje('La opción seleccionada no existe.');
+        break;
     }
   }
 
@@ -50,6 +105,11 @@ class _VotacionScreenState extends State<VotacionScreen> {
 
   void _verGanador() {
     final ganadores = _servicio.determinarGanador();
+
+    if (ganadores.length == 1) {
+      _confettiController.forward(from: 0);
+    }
+
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -57,20 +117,34 @@ class _VotacionScreenState extends State<VotacionScreen> {
       transitionDuration: const Duration(milliseconds: 450),
       pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
       transitionBuilder: (context, anim1, anim2, child) {
+        final content = ganadores.length == 1
+            ? 'La opcion ganadora es:\n\n${ganadores.first.texto}'
+            : 'Hay un empate entre:\n\n${ganadores.map((g) => g.texto).join('\n')}';
+
         return ScaleTransition(
           scale: CurvedAnimation(parent: anim1, curve: Curves.elasticOut),
           child: FadeTransition(
             opacity: anim1,
-            child: AlertDialog(
-              title: const Text('Resultado del plebiscito'),
-              content: Text(
-                ganadores.length == 1
-                    ? 'La opcion ganadora es:\n\n' + ganadores.first.texto
-                    : 'Hay un empate entre:\n\n' + ganadores.map((g) => g.texto).join('\n'),
-                textAlign: TextAlign.center,
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
+            child: Stack(
+              children: [
+                if (ganadores.length == 1)
+                  Positioned.fill(
+                    child: AnimatedBuilder(
+                      animation: _confettiController,
+                      builder: (context, _) => CustomPaint(
+                        painter: ConfettiPainter(
+                          progress: _confettiController.value,
+                        ),
+                      ),
+                    ),
+                  ),
+                AlertDialog(
+                  title: const Text('Resultado del plebiscito'),
+                  content: Text(content, textAlign: TextAlign.center),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
+                  ],
+                ),
               ],
             ),
           ),
@@ -89,6 +163,15 @@ class _VotacionScreenState extends State<VotacionScreen> {
         children: [
           Text(_votacion.pregunta, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 20),
+          TextField(
+            controller: _usuarioController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'ID del vecino',
+              hintText: 'ej. vecino-01',
+            ),
+          ),
+          const SizedBox(height: 16),
           ...resultados.map((r) => _BarraOpcion(
                 resultado: r,
                 puedeVotar: !_yaVote,
@@ -110,6 +193,7 @@ class _BarraOpcion extends StatelessWidget {
   final ResultadoOpcion resultado;
   final bool puedeVotar;
   final VoidCallback onVotar;
+
   const _BarraOpcion({required this.resultado, required this.puedeVotar, required this.onVotar});
 
   @override
@@ -127,7 +211,7 @@ class _BarraOpcion extends StatelessWidget {
                 tween: Tween(begin: 0, end: resultado.porcentaje),
                 duration: const Duration(milliseconds: 700),
                 curve: Curves.easeOutCubic,
-                builder: (context, valor, _) => Text(valor.toStringAsFixed(0) + '%'),
+                builder: (context, valor, _) => Text('${valor.toStringAsFixed(0)}%'),
               ),
             ],
           ),

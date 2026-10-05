@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vota_dolores_hidalgo/modelos/opcion_votacion.dart';
 import 'package:vota_dolores_hidalgo/modelos/votacion.dart';
 import 'package:vota_dolores_hidalgo/logica/resultado_voto.dart';
@@ -151,5 +152,60 @@ void main() {
     expect(totalVotos, 3); // el intento repetido de vecino1 no debio contar
     expect(ganadores.length, 1);
     expect(ganadores.first.id, 'jardin');
+  });
+
+  test('inyeccion de reloj permite validar cierre de votacion sin depender del sistema', () {
+    final votacion = _crearVotacionDePrueba(fechaCierre: DateTime(2030, 1, 1));
+    final servicio = ServicioVotacion(
+      votacion,
+      reloj: () => DateTime(2035, 1, 1),
+    );
+
+    final resultado = servicio.registrarVoto(idUsuario: 'vecino-1', idOpcion: 'op1');
+
+    expect(resultado, ResultadoVoto.votacionCerrada);
+    expect(votacion.opciones[0].votos, 0);
+  });
+
+  test('el voto numero 501 se rechaza al superar el maximo de votantes', () {
+    final votacion = _crearVotacionDePrueba();
+    final servicio = ServicioVotacion(votacion, maxVotos: 500);
+
+    for (var i = 0; i < 500; i++) {
+      final resultado = servicio.registrarVoto(idUsuario: 'vecino-$i', idOpcion: 'op1');
+      expect(resultado, ResultadoVoto.exitoso);
+    }
+
+    final resultado = servicio.registrarVoto(idUsuario: 'vecino-500', idOpcion: 'op2');
+
+    expect(resultado, ResultadoVoto.maximoVotosAlcanzado);
+  });
+
+  test('la votacion anonima no guarda la opcion elegida por cada usuario', () {
+    final votacion = _crearVotacionDePrueba();
+    final servicio = ServicioVotacion(votacion, modoAnonimo: true);
+
+    final resultado = servicio.registrarVoto(idUsuario: 'vecino-1', idOpcion: 'op1');
+
+    expect(resultado, ResultadoVoto.exitoso);
+    expect(votacion.opciones[0].votos, 1);
+    expect(votacion.opcionesPorUsuario.containsKey('vecino-1'), isFalse);
+    expect(votacion.votantes.contains('vecino-1'), isTrue);
+  });
+
+  test('persistencia con shared_preferences conserva los votos', () async {
+    SharedPreferences.setMockInitialValues({});
+    final votacion = _crearVotacionDePrueba();
+    final servicio = ServicioVotacion(votacion);
+
+    servicio.registrarVoto(idUsuario: 'vecino-a', idOpcion: 'op1');
+    await servicio.guardarEstado();
+
+    final votacionRecuperada = _crearVotacionDePrueba();
+    final servicioRecuperado = ServicioVotacion(votacionRecuperada);
+    await servicioRecuperado.cargarEstado();
+
+    expect(votacionRecuperada.opciones[0].votos, 1);
+    expect(votacionRecuperada.votantes.contains('vecino-a'), isTrue);
   });
 }
