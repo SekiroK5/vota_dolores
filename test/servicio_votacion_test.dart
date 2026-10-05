@@ -25,4 +25,13 @@ void main() {
     expect(resultado, ResultadoVoto.exitoso);
     expect(votacion.opciones[0].votos, 1);
   });
+
+  test('votar por una opcion que no existe regresa opcionInvalida', () {
+    final votacion = _crearVotacionDePrueba();
+    final servicio = ServicioVotacion(votacion);
+
+    final resultado = servicio.registrarVoto(idUsuario: 'user1', idOpcion: 'no-existe');
+
+    expect(resultado, ResultadoVoto.opcionInvalida);
+  });
 }
