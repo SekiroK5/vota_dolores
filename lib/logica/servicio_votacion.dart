@@ -8,8 +8,11 @@ class ServicioVotacion {
   ServicioVotacion(this.votacion);
 
   ResultadoVoto registrarVoto({required String idUsuario, required String idOpcion}) {
-    if (DateTime.now().isAfter(votacion.fechaCierre)) return ResultadoVoto.votacionCerrada;
-    if (votacion.votantes.contains(idUsuario)) return ResultadoVoto.usuarioYaVoto;
+    final yaCerro = DateTime.now().isAfter(votacion.fechaCierre);
+    if (yaCerro) return ResultadoVoto.votacionCerrada;
+
+    final yaVoto = votacion.votantes.contains(idUsuario);
+    if (yaVoto) return ResultadoVoto.usuarioYaVoto;
 
     final opcion = _buscarOpcion(idOpcion);
     if (opcion == null) return ResultadoVoto.opcionInvalida;
