@@ -126,4 +126,30 @@ void main() {
 
     expect(resultado, ResultadoVoto.exitoso);
   });
+
+  test('simulacion completa: varios vecinos votan y se determina un ganador', () {
+    final votacion = Votacion(
+      pregunta: 'Que obra prioritaria debe realizar el municipio?',
+      opciones: [
+        OpcionVotacion(id: 'jardin', texto: 'Rehabilitacion del Jardin Principal'),
+        OpcionVotacion(id: 'biblioteca', texto: 'Nueva Biblioteca Digital'),
+        OpcionVotacion(id: 'alumbrado', texto: 'Alumbrado en el Barrio de Analco'),
+      ],
+      fechaCierre: DateTime.now().add(const Duration(days: 3)),
+    );
+    final servicio = ServicioVotacion(votacion);
+
+    servicio.registrarVoto(idUsuario: 'vecino1', idOpcion: 'jardin');
+    servicio.registrarVoto(idUsuario: 'vecino2', idOpcion: 'jardin');
+    servicio.registrarVoto(idUsuario: 'vecino3', idOpcion: 'biblioteca');
+    servicio.registrarVoto(idUsuario: 'vecino1', idOpcion: 'alumbrado'); // repetido: no debe contar
+
+    final resultados = servicio.obtenerResultados();
+    final totalVotos = resultados.fold<double>(0, (s, r) => s + r.opcion.votos);
+    final ganadores = servicio.determinarGanador();
+
+    expect(totalVotos, 3); // el intento repetido de vecino1 no debio contar
+    expect(ganadores.length, 1);
+    expect(ganadores.first.id, 'jardin');
+  });
 }
