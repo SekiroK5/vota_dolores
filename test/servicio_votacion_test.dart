@@ -34,4 +34,15 @@ void main() {
 
     expect(resultado, ResultadoVoto.opcionInvalida);
   });
+
+  test('un mismo usuario no puede votar dos veces', () {
+    final votacion = _crearVotacionDePrueba();
+    final servicio = ServicioVotacion(votacion);
+
+    servicio.registrarVoto(idUsuario: 'user1', idOpcion: 'op1');
+    final segundoIntento = servicio.registrarVoto(idUsuario: 'user1', idOpcion: 'op2');
+
+    expect(segundoIntento, ResultadoVoto.usuarioYaVoto);
+    expect(votacion.opciones[1].votos, 0); // op2 no debio incrementarse
+  });
 }
