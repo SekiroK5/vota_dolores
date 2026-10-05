@@ -26,6 +26,11 @@ class ServicioVotacion {
     }).toList();
   }
 
+  List<OpcionVotacion> determinarGanador() {
+    final maxVotos = votacion.opciones.map((o) => o.votos).reduce((a, b) => a > b ? a : b);
+    return votacion.opciones.where((o) => o.votos == maxVotos).toList();
+  }
+
   OpcionVotacion? _buscarOpcion(String id) {
     for (final o in votacion.opciones) {
       if (o.id == id) return o;
