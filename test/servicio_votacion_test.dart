@@ -45,4 +45,29 @@ void main() {
     expect(segundoIntento, ResultadoVoto.usuarioYaVoto);
     expect(votacion.opciones[1].votos, 0); // op2 no debio incrementarse
   });
+
+  test('calcula el porcentaje de cada opcion correctamente', () {
+    final votacion = _crearVotacionDePrueba();
+    final servicio = ServicioVotacion(votacion);
+    servicio.registrarVoto(idUsuario: 'u1', idOpcion: 'op1');
+    servicio.registrarVoto(idUsuario: 'u2', idOpcion: 'op1');
+    servicio.registrarVoto(idUsuario: 'u3', idOpcion: 'op1');
+    servicio.registrarVoto(idUsuario: 'u4', idOpcion: 'op2');
+
+    final resultados = servicio.obtenerResultados();
+
+    final op1 = resultados.firstWhere((r) => r.opcion.id == 'op1');
+    final op2 = resultados.firstWhere((r) => r.opcion.id == 'op2');
+    expect(op1.porcentaje, 75.0);
+    expect(op2.porcentaje, 25.0);
+  });
+
+  test('si no hay ningun voto, todos los porcentajes son 0', () {
+    final votacion = _crearVotacionDePrueba();
+    final servicio = ServicioVotacion(votacion);
+
+    final resultados = servicio.obtenerResultados();
+
+    expect(resultados.every((r) => r.porcentaje == 0), true);
+  });
 }
