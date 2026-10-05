@@ -103,4 +103,27 @@ void main() {
 
     expect(ganadores.length, 3);
   });
+
+  test('no se puede votar si la votacion ya cerro', () {
+    final votacionCerrada = _crearVotacionDePrueba(
+      fechaCierre: DateTime(2000, 1, 1), // una fecha muy en el pasado
+    );
+    final servicio = ServicioVotacion(votacionCerrada);
+
+    final resultado = servicio.registrarVoto(idUsuario: 'user1', idOpcion: 'op1');
+
+    expect(resultado, ResultadoVoto.votacionCerrada);
+    expect(votacionCerrada.opciones[0].votos, 0);
+  });
+
+  test('si la votacion sigue abierta, el voto se registra normalmente', () {
+    final votacionAbierta = _crearVotacionDePrueba(
+      fechaCierre: DateTime.now().add(const Duration(days: 1)),
+    );
+    final servicio = ServicioVotacion(votacionAbierta);
+
+    final resultado = servicio.registrarVoto(idUsuario: 'user1', idOpcion: 'op1');
+
+    expect(resultado, ResultadoVoto.exitoso);
+  });
 }
